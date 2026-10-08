@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================================
+   SAKDHA DESIGN TOKENS
+   Premium 2026 fashion marketplace. Colors are space-separated RGB channels so
+   Tailwind's `<alpha-value>` opacity modifier works (e.g. bg-brand-600/10).
+   ========================================================================== */
+@layer base {
+  :root {
+    /* Ink — neutral greys from off-white to near-black. */
+    --c-ink-50: 248 248 249;
+    --c-ink-100: 240 240 242;
+    --c-ink-200: 229 229 233;
+    --c-ink-300: 205 205 211;
+    --c-ink-400: 160 160 170;
+    --c-ink-500: 112 112 124;
+    --c-ink-600: 82 82 93;
+    --c-ink-700: 61 61 70;
+    --c-ink-800: 39 39 46;
+    --c-ink-900: 24 24 29;
+    --c-ink-950: 14 14 17;
+
+    /* Brand — warm fashion rose / terracotta. 600 is the primary action. */
+    --c-brand-50: 253 243 240;
+    --c-brand-100: 251 229 223;
+    --c-brand-200: 247 203 191;
+    --c-brand-300: 240 167 148;
+    --c-brand-400: 230 123 97;
+    --c-brand-500: 219 88 61;
+    --c-brand-600: 199 64 42;   /* primary */
+    --c-brand-700: 166 49 33;
+    --c-brand-800: 134 42 31;
+    --c-brand-900: 110 38 30;
+    --c-brand-950: 60 17 13;
+
+    --c-surface: 255 255 255;
+    --c-surface-2: 250 250 251;
+    --c-line: 229 229 233;
+
+    --c-success: 22 163 74;
+    --c-warning: 202 138 4;
+    --c-danger: 220 38 38;
+
+    --font-sans: "Outfit", system-ui, sans-serif;
+    --font-display: "Fraunces", Georgia, serif;
+  }
+
+  :root[data-theme="dark"] {
+    --c-ink-50: 14 14 17;
+    --c-ink-100: 24 24 29;
+    --c-ink-200: 39 39 46;
+    --c-ink-300: 61 61 70;
+    --c-ink-400: 112 112 124;
+    --c-ink-500: 160 160 170;
+    --c-ink-600: 205 205 211;
+    --c-ink-700: 229 229 233;
+    --c-ink-800: 240 240 242;
+    --c-ink-900: 248 248 249;
+    --c-ink-950: 255 255 255;
+
+    --c-surface: 20 20 24;
+    --c-surface-2: 28 28 33;
+    --c-line: 45 45 52;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: rgb(var(--c-surface-2));
+    color: rgb(var(--c-ink-900));
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+
+  ::selection {
+    background-color: rgb(var(--c-brand-600) / 0.18);
+  }
+}
+
+@layer components {
+  .container-content {
+    @apply mx-auto w-full max-w-content px-4 sm:px-6 lg:px-8;
+  }
+  .skeleton {
+    @apply relative overflow-hidden rounded-lg bg-ink-200/60;
+  }
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgb(var(--c-surface) / 0.55),
+      transparent
+    );
+  }
+}
