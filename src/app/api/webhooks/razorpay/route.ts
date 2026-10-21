@@ -179,9 +179,12 @@ async function handlePaymentCaptured(event: RazorpayEvent) {
   // ledger is written twice.
   if (order.payment_status === "PAID") return;
 
+  // store_id comes from the seller_order itself — the ownership recorded when
+  // the order was placed. Never re-resolved from the seller's current store,
+  // which could have changed since.
   const { data: sellerOrders } = await supabaseAdmin
     .from("seller_orders")
-    .select("id, seller_id, subtotal, shipping, discount, commission, seller_payable")
+    .select("id, seller_id, store_id, subtotal, shipping, discount, commission, seller_payable")
     .eq("order_id", order.id);
 
   const { data: items } = await supabaseAdmin
@@ -221,6 +224,8 @@ async function handlePaymentCaptured(event: RazorpayEvent) {
     order_id: string;
     seller_order_id: string | null;
     seller_id: string | null;
+    /** Owning tenant. NULL only for platform-level rows (gateway fees). */
+    store_id: string | null;
     type: string;
     amount: number;
     direction: "debit" | "credit";
@@ -236,6 +241,7 @@ async function handlePaymentCaptured(event: RazorpayEvent) {
     order_id: order.id,
     seller_order_id: null,
     seller_id: null,
+    store_id: null,
     ref_json: {},
     type,
     amount,
@@ -247,13 +253,16 @@ async function handlePaymentCaptured(event: RazorpayEvent) {
   for (const so of (sellerOrders ?? []) as {
     id: string;
     seller_id: string;
+    store_id: string;
     subtotal: number;
     shipping: number;
     discount: number;
     commission: number;
     seller_payable: number;
   }[]) {
-    const scope = { seller_order_id: so.id, seller_id: so.seller_id };
+    // Both IDs travel together on every seller-scoped row. They are read from
+    // the same seller_order, so they cannot disagree.
+    const scope = { seller_order_id: so.id, seller_id: so.seller_id, store_id: so.store_id };
     ledger.push(entry("PRODUCT_SALE", so.subtotal, "credit", scope));
     if (so.shipping > 0) ledger.push(entry("SHIPPING", so.shipping, "credit", scope));
     if (so.discount > 0) ledger.push(entry("DISCOUNT", so.discount, "debit", scope));
@@ -369,11 +378,12 @@ async function handleRefund(event: RazorpayEvent) {
   if (!payment) return;
 
   const orderId = (payment as { order_id: string }).order_id;
+  const sellerOrderId = (refund.notes?.seller_order_id as string | undefined) ?? null;
 
   await supabaseAdmin.from("refunds").upsert(
     {
       order_id: orderId,
-      seller_order_id: refund.notes?.seller_order_id ?? null,
+      seller_order_id: sellerOrderId,
       razorpay_refund_id: refund.id,
       amount: refund.amount,
       status: refund.status,
@@ -381,9 +391,46 @@ async function handleRefund(event: RazorpayEvent) {
     { onConflict: "razorpay_refund_id" }
   );
 
+  /**
+   * Resolve who this refund belongs to.
+   *
+   * This used to be omitted entirely, and the omission was expensive: a REFUND
+   * row with a NULL seller_id is skipped by settlePeriod() and never matched by
+   * getSellerEarnings()'s `.eq("seller_id", …)`, so refunds silently failed to
+   * reduce any payout. `netPayable = max(0, earned − refunds)` could only ever
+   * see refunds = 0.
+   *
+   * Read from the seller_order rather than the refund notes: `notes` is echoed
+   * back by the provider and is not proof of ownership, whereas the
+   * seller_order is our own record of who sold the goods.
+   */
+  let refundOwner: { seller_id: string; store_id: string } | null = null;
+  if (sellerOrderId) {
+    const { data } = await supabaseAdmin
+      .from("seller_orders")
+      .select("seller_id, store_id")
+      .eq("id", sellerOrderId)
+      // The seller_order must belong to the order the payment was for — a
+      // mismatched note must not be able to charge a refund to another store.
+      .eq("order_id", orderId)
+      .maybeSingle();
+    refundOwner = (data as { seller_id: string; store_id: string } | null) ?? null;
+  }
+
+  if (sellerOrderId && !refundOwner) {
+    // Loud rather than silently unattributed: an unowned refund understates a
+    // deduction, which is the expensive direction to get wrong.
+    console.error(
+      `refund ${refund.id}: seller_order ${sellerOrderId} does not belong to order ${orderId}; ` +
+        `the ledger row will be unattributed and will NOT reduce any settlement.`
+    );
+  }
+
   const { error: ledgerError } = await supabaseAdmin.from("ledger_entries").insert({
     order_id: orderId,
-    seller_order_id: refund.notes?.seller_order_id ?? null,
+    seller_order_id: sellerOrderId,
+    seller_id: refundOwner?.seller_id ?? null,
+    store_id: refundOwner?.store_id ?? null,
     type: "REFUND",
     amount: refund.amount,
     direction: "debit",
