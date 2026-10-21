@@ -15,6 +15,12 @@ export type LedgerRow = {
   amount: number;
   direction: "debit" | "credit";
   seller_id: string | null;
+  /**
+   * Owning tenant (0013). Optional while historical rows are being backfilled,
+   * and legitimately null forever on platform-level rows such as
+   * PAYMENT_GATEWAY_FEE, which belong to Sakdha rather than to any store.
+   */
+  store_id?: string | null;
   order_id: string | null;
   created_at: string;
 };

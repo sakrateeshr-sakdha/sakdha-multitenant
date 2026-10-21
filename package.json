@@ -15,6 +15,8 @@
     "check:status": "node scripts/check-order-status.mjs",
     "check:settlement": "node scripts/check-settlement.mjs",
     "check:tenant": "node scripts/check-tenant.mjs",
+    "check:store-finance": "node scripts/check-store-finance.mjs",
+    "check:finance-isolation": "node scripts/check-finance-isolation.mjs",
     "check:all": "npm run typecheck && npm run check:pricing && npm run check:status && npm run check:settlement && npm run check:tenant && npm run check:performance && npm run check:links",
     "check:performance": "node scripts/check-performance.mjs",
     "bundle": "node scripts/bundle-migration.mjs"

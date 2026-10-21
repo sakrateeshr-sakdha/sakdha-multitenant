@@ -73,17 +73,41 @@ export async function runSettlement(period: string): Promise<ActionResult<{ coun
       .map((r) => r.seller_id)
   );
 
-  const rows = settlements
-    .filter((s) => !alreadyPaid.has(s.sellerId))
-    .map((s) => ({
-      seller_id: s.sellerId,
-      period,
-      gross: s.gross,
-      commission: s.commission,
-      refunds: s.refunds,
-      net_payable: s.netPayable,
-      status: "pending",
-    }));
+  // Resolve each payee's store server-side. The settlement is store-scoped
+  // accounting, but the seller remains the PAYEE and the Razorpay beneficiary
+  // — both IDs are persisted, and neither is taken from client input.
+  const payees = settlements.filter((s) => !alreadyPaid.has(s.sellerId));
+  const storeBySeller = new Map<string, string>();
+  if (payees.length > 0) {
+    const { data: storeRows } = await supabaseAdmin
+      .from("stores")
+      .select("id, seller_id")
+      .in("seller_id", payees.map((s) => s.sellerId));
+    for (const row of (storeRows ?? []) as { id: string; seller_id: string }[]) {
+      storeBySeller.set(row.seller_id, row.id);
+    }
+  }
+
+  // A payee with no resolvable store would produce an unattributable payout.
+  // Refuse the whole run rather than record a partially-scoped period.
+  const unresolved = payees.filter((s) => !storeBySeller.has(s.sellerId));
+  if (unresolved.length > 0) {
+    return {
+      ok: false,
+      error: `${unresolved.length} seller(s) in this period have no store; settlement cannot be attributed.`,
+    };
+  }
+
+  const rows = payees.map((s) => ({
+    seller_id: s.sellerId,
+    store_id: storeBySeller.get(s.sellerId)!,
+    period,
+    gross: s.gross,
+    commission: s.commission,
+    refunds: s.refunds,
+    net_payable: s.netPayable,
+    status: "pending",
+  }));
 
   if (rows.length > 0) {
     const { error } = await supabaseAdmin
@@ -126,7 +150,7 @@ export async function markSettlementPaid(
 
   const { data: settlement } = await supabaseAdmin
     .from("settlements")
-    .select("id, seller_id, period, net_payable, status")
+    .select("id, seller_id, store_id, period, net_payable, status")
     .eq("id", parsed.data.settlementId)
     .maybeSingle();
   if (!settlement) return { ok: false, error: "Settlement not found." };
@@ -134,6 +158,7 @@ export async function markSettlementPaid(
   const row = settlement as {
     id: string;
     seller_id: string;
+    store_id: string | null;
     period: string;
     net_payable: number;
     status: string;
@@ -151,10 +176,25 @@ export async function markSettlementPaid(
   if (error) return { ok: false, error: "Could not mark it paid." };
 
   // The payout is itself a movement of money and belongs in the ledger.
+  // Carries the settlement's own store_id rather than re-resolving it, so the
+  // payout row and the settlement it records can never disagree. Falls back to
+  // a server-side lookup for settlements created before 0013 added the column.
+  const payoutStoreId =
+    row.store_id ??
+    ((
+      await supabaseAdmin
+        .from("stores")
+        .select("id")
+        .eq("seller_id", row.seller_id)
+        .maybeSingle()
+    ).data as { id: string } | null)?.id ??
+    null;
+
   const { error: ledgerError } = await supabaseAdmin.from("ledger_entries").insert({
     order_id: null,
     seller_order_id: null,
     seller_id: row.seller_id,
+    store_id: payoutStoreId,
     type: "SETTLEMENT",
     amount: row.net_payable,
     direction: "debit",
