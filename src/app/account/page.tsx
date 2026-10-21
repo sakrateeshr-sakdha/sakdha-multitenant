@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { Heart, Package, Store as StoreIcon } from "lucide-react";
+import { Heart, Package, Shield, Store as StoreIcon } from "lucide-react";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { Badge } from "@/components/ui/Badge";
@@ -76,6 +76,29 @@ export default async function AccountPage() {
           </div>
           <SignOutButton />
         </div>
+
+        {/* An admin lands here after signing in like everyone else, and the
+            panel is linked from nowhere in the public chrome — the header is a
+            static component on purpose, so making it role-aware would force
+            every cached storefront page to render dynamically. This is the one
+            page that already knows the role, so the way in belongs here. */}
+        {me.role === "admin" && (
+          <Link
+            href="/admin"
+            className="mt-8 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-brand-600/30 bg-brand-50/50 p-5 transition hover:border-brand-600/60"
+          >
+            <div className="flex items-center gap-3">
+              <Shield className="h-5 w-5 shrink-0 text-brand-600" aria-hidden />
+              <div>
+                <p className="font-medium text-ink-900">Admin panel</p>
+                <p className="mt-0.5 text-xs text-ink-500">
+                  Stores, sellers and finance across the whole platform.
+                </p>
+              </div>
+            </div>
+            <span className="text-sm text-brand-600">Open →</span>
+          </Link>
+        )}
 
         <div className="mt-8 grid gap-4 sm:grid-cols-3">
           <Link

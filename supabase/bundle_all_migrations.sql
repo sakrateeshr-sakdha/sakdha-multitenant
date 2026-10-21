@@ -1,4 +1,16 @@
 -- ============================================================================
+-- ⚠ DO NOT RUN THIS AGAINST THE EXISTING DATABASE. ⚠
+--
+-- Already applied on 2026-10-05. Its `create table` statements are unguarded
+-- (no `if not exists`), so re-running fails immediately with
+--   ERROR 42P07: relation "profiles" already exists
+-- and tells you nothing about what is actually deployed.
+--
+-- To apply a NEW migration:  npm run bundle -- 00NN
+-- then paste supabase/apply_00NN.sql — one migration, wrapped in a transaction.
+-- ============================================================================
+
+-- ============================================================================
 -- SAKDHA MARKETPLACE — FULL SCHEMA BUNDLE
 --
 -- This is migrations 0001..0005 concatenated for a ONE-SHOT paste into the
